@@ -1,0 +1,40 @@
+# Git
+.git
+.github
+.gitignore
+
+# Environment & Keys
+.env
+.env.*
+*.key
+storage/*.key
+
+# Local Development Junk
+node_modules
+vendor
+public/build
+npm-debug.log
+yarn-error.log
+
+# Docker Specifics
+Dockerfile
+compose.yaml
+docker-compose.yml
+docker/
+
+# Storage & Logs (We want a clean slate; volumes will handle persistence)
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/debugbar/
+public/storage
+
+# Testing & IDE
+tests/
+phpunit.xml
+.phpunit.result.cache
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,61 @@
+services:
+  # --- THE WEB SERVER (FrankenPHP) ---
+  web:
+    build: .
+    restart: always
+    env_file: .env
+    healthcheck:
+      # Laravel 11/12 internal health route
+      test: ["CMD", "curl", "-f", "http://localhost/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    command:
+      - php
+      - artisan
+      - octane:start
+      - --server=frankenphp
+      - --host=0.0.0.0
+      - --port=80
+      - --admin-port=2019
+    volumes:
+      - laravel_uploads:/app/storage/app/public
+      - laravel_logs:/app/storage/logs
+    networks:
+      - dokploy-network
+
+  # --- THE QUEUE (Horizon) ---
+  horizon:
+    build: .
+    restart: always
+    env_file: .env
+    command: ["php", "artisan", "horizon"]
+    depends_on:
+      web:
+        condition: service_healthy
+    volumes:
+      - laravel_uploads:/app/storage/app/public
+    networks:
+      - dokploy-network
+
+  # --- THE SCHEDULER ---
+  scheduler:
+    build: .
+    restart: always
+    env_file: .env
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+
+volumes:
+  laravel_uploads:
+  laravel_logs:
+
+networks:
+  dokploy-network:
+    external: true
+    name: dokploy-network
