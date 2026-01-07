@@ -1,6 +1,6 @@
 # 🚀 Laravel 12 + Filament 4 + Octane (FrankenPHP) Ultimate Starter
 
-This is a comprehensive, production-ready boilerplate. It provides a seamless transition from a local development environment (via **Laravel Sail**) to a high-performance production stack (via **FrankenPHP Worker Mode**, **Redis**, and **Dokploy**).
+A production-grade, high-performance infrastructure boilerplate. It bridges the gap between local development (Laravel Sail) and production worker-mode (FrankenPHP + Octane) for sub-10ms response times.
 
 ---
 
@@ -13,35 +13,33 @@ This is a comprehensive, production-ready boilerplate. It provides a seamless tr
 
 ---
 
-## 🛠 Local Development Setup
+## 🛠 Local Development Setup (Laravel Sail)
 
-This project uses **Laravel Sail**. Ensure you have Docker installed.
+Ensure you have Docker installed on your machine.
 
 ### 1. Initial Installation
 ```bash
 # Clone the repository
-git clone [https://github.com/your-username/your-repo-name.git](https://github.com/your-username/your-repo-name.git)
-cd your-repo-name
+git clone https://github.com/jayxd-com/laravel-frankenphp-octane-boilerplate.git
+cd laravel-frankenphp-octane-boilerplate
 
-# Install dependencies via a temporary container
-docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -v "$(pwd):/var/www/html" \
-    -w /var/www/html \
-    laravelsail/php84-composer:latest \
-    composer install --ignore-platform-reqs
+# Install dependencies
+# (If you have PHP/Composer locally)
+composer install
+
+# (OR use the Sail shortcut if you don't have PHP installed)
+docker run --rm -it -v $(pwd):/var/www/html -w /var/www/html laravelsail/php84-composer:latest composer install --ignore-platform-reqs
 ```
-
 ### 2. Environment Configuration
-Copy the environment file and note the custom **Sail Port Overrides** to avoid conflicts with other local projects:
+Copy the environment file. Custom **Sail Port Overrides** are included to prevent conflicts with other local projects:
 ```bash
 cp .env.example .env
 ```
 
-The following overrides are included in the `.env` for Sail:
+The following overrides are pre-set for Sail:
 ```env
-# SAIL PORT CONFIGURATION
 APP_PORT=8100
+APP_URL=http://localhost:8100
 FORWARD_DB_PORT=3390
 FORWARD_REDIS_PORT=6400
 FORWARD_MAILPIT_PORT=1100
@@ -50,64 +48,79 @@ VITE_PORT=5100
 ```
 
 ### 3. Start the Environment
-Set up an alias for ease of use (optional but recommended):
-`alias sail='[ -f sail ] && sh sail || php vendor/bin/sail'`
-
 ```bash
+# Alias for ease of use
+alias sail='[ -f sail ] && sh sail || php vendor/bin/sail'
+
 sail up -d
-sail artisan migrate
 sail artisan key:generate
+sail artisan migrate
 ```
 
-### ⚠️ Note on Terminal Warnings
-When running `docker compose` directly in the root, you may see:
-1. **"Multiple config files found"**: This is normal. The project includes `compose.yaml` for local Sail development and `docker-compose.yml` for production. Docker will default to the local version.
-2. **"WWWUSER variable not set"**: This is a Sail-specific warning. It does not affect production. Locally, Sail handles this automatically when using the `./vendor/bin/sail` command.
 ---
 
 ## 🚢 Production Infrastructure (Dokploy)
 
-The production stack uses a dedicated multi-service architecture defined in `docker-compose.yml`.
 
-### 1. Critical Production .env
-Ensure these are set in your PaaS/Dokploy dashboard:
-```env
-OCTANE_SERVER=frankenphp
-OCTANE_HTTPS=true         # Critical for SSL termination
-QUEUE_CONNECTION=redis    # Required for Horizon
-SESSION_DRIVER=redis      
-CACHE_STORE=redis         
-```
 
-### 2. Service Definition
-This boilerplate spins up four specialized containers from a single image:
-- **web:** Octane server running on Port 80 (Admin Port 2019).
-- **horizon:** Real-time queue monitoring.
-- **worker:** Dedicated heavy-task queue processor.
+### 1. Production Environment Checklist
+Set these in your Dokploy Dashboard. **Failure to set these correctly will break Filament links and SSL.**
+
+- [ ] `APP_ENV=production`
+- [ ] `APP_DEBUG=false`
+- [ ] `APP_URL=https://your-domain.com` (Must be your live URL)
+- [ ] `OCTANE_HTTPS=true` (Critical for SSL termination behind Traefik)
+- [ ] `APP_KEY=...` (Generate with `php artisan key:generate --show`)
+- [ ] `QUEUE_CONNECTION=redis`
+- [ ] `SESSION_DRIVER=redis` (Required for worker state persistence)
+
+### 2. Service Definitions
+This stack uses a single image to run four specialized roles:
+- **web:** Octane server running on Port 80 (Internal healthcheck at `/up`).
+- **horizon:** Dashboard-managed queue worker.
+- **worker:** Standard queue worker for heavy tasks.
 - **scheduler:** Native cron replacement.
+
+*Note: Horizon and Scheduler depend on the Web service being "Healthy" (Migrations finished) before starting.*
+
+---
+
+## ⚠️ Known Terminal Warnings
+1. **"Multiple config files found"**: Docker sees `compose.yaml` (Sail) and `docker-compose.yml` (Prod). This is normal. To stop the warning, use: `alias dc='docker compose -f compose.yaml'`.
+2. **"WWWUSER/WWWGROUP not set"**: Sail specific. Only matters for local dev. Add `WWWUSER=1000` to your `.env` to silence.
 
 ---
 
 ## 📁 Repository Structure
-The following files manage the production and local runtime:
-- `docker/entrypoint.sh` - Automated deployment (Migrations, Storage, Filament Caching).
-- `docker/php/local.ini` - Custom PHP production configurations.
-- `Dockerfile` - Multi-stage build for PHP 8.4.
-- `docker-compose.yml` - Production stack definition.
+```text
+.
+├── docker/
+│   ├── entrypoint.sh      # Automated Deployment Logic
+│   └── php/
+│       └── local.ini      # Optimized Opcache & Memory limits
+├── .dockerignore          # Clean production builds
+├── .gitignore
+├── Dockerfile             # Multi-stage PHP 8.4 build
+├── compose.yaml           # Local Sail Config
+├── docker-compose.yml     # Production Dokploy Config
+└── README.md
+```
 
 ---
 
 ## ⚡ Deployment Checklist
-1. **Dokploy:** Create a new service and point to this repo.
-2. **Ports:** Set the **Container Port** to `80`. Do NOT expose host ports manually; Dokploy's Traefik handles this.
-3. **Optimizations:** The `entrypoint.sh` automatically runs `php artisan filament:optimize` to ensure the admin panel is blazing fast in worker mode.
+1. **Dokploy:** Point your service to this repo and the `docker-compose.yml` file.
+2. **Ports:** Set **Container Port** to `80`. Do NOT expose host ports; Traefik routes internally.
+3. **Healthcheck:** The web service uses `curl -fLk http://localhost/up`. Ensure your `Dockerfile` has `curl` installed.
 
 ---
 
 ## 📝 Maintenance
 To clear all caches and reset the worker state:
 ```bash
+# Local
 sail artisan optimize:clear
-# Or in production
+
+# Production
 php artisan optimize:clear
 ```
